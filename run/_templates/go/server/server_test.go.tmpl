@@ -1,0 +1,34 @@
+package server_test
+
+import (
+	"context"
+	"log"
+	"testing"
+
+	"github.com/atoscerebro/grpctest"
+	"google.golang.org/grpc"
+
+	"{{.ServiceFqn}}/config"
+	pb "{{.ServiceFqn}}/proto"
+	"{{.ServiceFqn}}/server"
+)
+
+func TestPing(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	s := grpctest.NewServer().WithContext(ctx)
+	defer s.Close()
+
+	conf := config.MustLoadConfig()
+	srv := server.MustLoadServer(conf)
+	s.RunServer(t, func(s *grpc.Server) {
+		server.Register(s, srv)
+	})
+
+	client := pb.New{{.ServiceName | Pascal}}Client(s.ClientConn(t))
+	resp, err := client.Ping(ctx, &pb.PingRequest{})
+	if err != nil {
+		t.Fatalf("Ping failed: %v", err)
+	}
+	log.Printf("Response: %+v", resp)
+}

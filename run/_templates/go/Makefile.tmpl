@@ -1,0 +1,90 @@
+GITHUB_SHA?=${shell git rev-parse --short HEAD || echo latest}
+METHOD?=Ping
+
+DOCKER_IMAGE_BASE = {{.ProjectName}}.{{.ServiceNamespace}}.{{.ServiceName}}
+# Assuming the local Docker registry to be the kind-registry container created by create_local_cluster.sh
+DOCKER_LOCAL_REGISTRY = 127.0.0.1:8081
+# The DOCKER_LOCAL_IMAGE_NAME_TAG has the following format: [REGISTRY]/[PROJECT/NAMESPACE]/[SERVICE]:[TAG]
+DOCKER_LOCAL_IMAGE_NAME_TAG = $(DOCKER_LOCAL_REGISTRY)/$(DOCKER_IMAGE_BASE):latest
+
+proto:
+	@protoc --go_out=. --go_opt=paths=source_relative \
+	--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	proto/{{.ServiceNamespace | Snake}}_{{.ServiceName | Snake}}.proto
+.PHONY: proto
+
+proxy:
+	protoc -I . \
+		--grpc-gateway_out ./ \
+        --grpc-gateway_opt logtostderr=true \
+        --grpc-gateway_opt paths=source_relative \
+        --grpc-gateway_opt grpc_api_configuration=grpc-gateway-api-config.yml \
+        proto/{{.ServiceNamespace | Snake}}_{{.ServiceName}}.proto
+.PHONY: proxy
+
+test:
+	@go test -race -coverprofile=coverage.txt -v $$(go list ./...)
+.PHONY: test
+
+run: proto
+	@go run cmd/server/main.go
+.PHONY: run
+
+# !!! IMPORTANT !!! The Docker build context is set to the project root directory
+# by specifying it using the relative path: ./../../..
+build-image: proto
+	@echo "Building *LOCAL* Docker image with name and tag: [{{.Registry}}/${DOCKER_IMAGE_BASE}:latest]"
+	@echo "-----------------------------------------------"
+	docker build \
+		--file ./Dockerfile \
+		--progress=plain \
+		--tag "{{.Registry}}/${DOCKER_IMAGE_BASE}:${GITHUB_SHA}" \
+		--tag "{{.Registry}}/${DOCKER_IMAGE_BASE}:latest" \
+		./../../..
+.PHONY: build-image
+
+push-image: build-image
+	@echo "Pushing *LOCAL* Docker image with name and tag: [{{.Registry}}/${DOCKER_IMAGE_BASE}:latest]"
+	@echo "-----------------------------------------------"
+	docker push "{{.Registry}}/${DOCKER_IMAGE_BASE}:${GITHUB_SHA}"
+	docker push "{{.Registry}}/${DOCKER_IMAGE_BASE}:latest"
+.PHONY: push-image
+
+deploy: push-image
+	@kubectl apply -f manifests.yml
+.PHONY: deploy
+
+
+# !!! IMPORTANT !!! The Docker build context is set to the project root directory
+# by specifying it using the relative path: ./../../..
+build-image-local: proto
+	@echo "Building *LOCAL* Docker image with name and tag: [$(DOCKER_LOCAL_IMAGE_NAME_TAG)]"
+	@echo "-----------------------------------------------"
+	docker build \
+		--file ./Dockerfile \
+		--progress=plain \
+		--tag "$(DOCKER_LOCAL_IMAGE_NAME_TAG)" \
+		./../../..
+.PHONY: build-image-local
+
+push-image-local: build-image-local
+	@echo "Pushing *LOCAL* Docker image with name and tag: [$(DOCKER_LOCAL_IMAGE_NAME_TAG)]"
+	@echo "-----------------------------------------------"
+	docker push "$(DOCKER_LOCAL_IMAGE_NAME_TAG)"
+.PHONY: push-image-local
+
+deploy-local: push-image-local
+	yq 'with(select(.kind == "Deployment").spec.template.spec.containers[0] ; \
+	.env += {"name": "DATABASE_URL", "value": "postgresql://user:password@dockerhost.external:5432/{{.ProjectName}}?sslmode=disable"} | \
+	.image="$(DOCKER_LOCAL_IMAGE_NAME_TAG)")' \
+	manifests.yml | kubectl apply -f -
+.PHONY: deploy-local
+
+port-forward-local:
+	kubectl port-forward -n {{.ServiceNamespace}} service/{{.ServiceName}}-svc 8080:8080
+.PHONY: port-forward-local
+
+request-local:
+	grpcurl -plaintext -proto ./proto/{{.ServiceNamespace}}_{{.ServiceName}}.proto \
+	-d '$(BODY)' localhost:8080 {{.ServiceNamespace}}_{{.ServiceName}}.v1.{{.ServiceName | Pascal}}.$(METHOD)
+.PHONY: request-local

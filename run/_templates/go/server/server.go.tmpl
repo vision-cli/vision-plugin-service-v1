@@ -1,0 +1,29 @@
+package server
+
+import (
+	"context"
+
+	"google.golang.org/grpc"
+
+	"{{.ServiceFqn}}/config"
+	pb "{{.ServiceFqn}}/proto"
+)
+
+type Server struct {
+	pb.Unimplemented{{.ServiceName | Pascal}}Server
+	conf *config.Config
+}
+
+func MustLoadServer(conf *config.Config) *Server {
+	return &Server{
+		conf:        conf,
+	}
+}
+
+func Register(g *grpc.Server, s *Server) {
+	pb.Register{{.ServiceName | Pascal}}Server(g, s)
+}
+
+func (s *Server) Ping(ctx context.Context, req *pb.PingRequest) (*pb.PingResponse, error) {
+	return &pb.PingResponse{Status: "RUNNING"}, nil
+}

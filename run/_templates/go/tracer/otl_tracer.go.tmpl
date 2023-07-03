@@ -1,0 +1,62 @@
+package tracer
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
+
+	"{{.ServiceFqn}}/config"
+)
+
+const (
+	multiplier = 1.6
+	maxDelay   = 15 * time.Second
+)
+
+func InitTracing(ctx context.Context, conf *config.Config) (*sdktrace.TracerProvider, error) {
+	traceExporter, err := otlptracegrpc.New(
+		ctx,
+		otlptracegrpc.WithInsecure(),
+		otlptracegrpc.WithEndpoint(conf.OtlConnector),
+		otlptracegrpc.WithDialOption(
+			grpc.WithConnectParams(grpc.ConnectParams{
+				Backoff: backoff.Config{
+					BaseDelay:  time.Second,
+					Multiplier: multiplier,
+					MaxDelay:   maxDelay,
+				},
+				MinConnectTimeout: 0,
+			}),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("error creating trace exporter. %w", err)
+	}
+	return newTracerProvider(traceExporter), nil
+}
+
+func newTracerProvider(traceExporter *otlptrace.Exporter) *sdktrace.TracerProvider {
+	tracerProvider := sdktrace.NewTracerProvider(
+		sdktrace.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String("{{.ServiceName | Pascal}}"),
+			semconv.ServiceVersionKey.String("v1"),
+		)),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+		sdktrace.WithSpanProcessor(sdktrace.NewBatchSpanProcessor(traceExporter)),
+	)
+	otel.SetTracerProvider(tracerProvider)
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	return tracerProvider
+}

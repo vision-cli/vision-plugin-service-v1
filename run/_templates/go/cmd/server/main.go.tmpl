@@ -1,0 +1,47 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"net"
+
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc"
+
+	"{{.ServiceFqn}}/config"
+	"{{.ServiceFqn}}/server"
+	"{{.ServiceFqn}}/tracer"
+)
+
+func main() {
+	conf := config.MustLoadConfig()
+	srv := server.MustLoadServer(conf)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%s", conf.Host, conf.Port))
+	if err != nil {
+		log.Fatal().Err(err).Msgf("failed to listen on %s:%s", conf.Host, conf.Port)
+	}
+
+	_, err = tracer.InitTracing(context.Background(), conf)
+	if err != nil {
+		log.Fatal().Err(err).Msgf("failed to init tracer with end point %s", conf.OtlConnector)
+	}
+
+	gsrv := newGrpcServer()
+	server.Register(gsrv, srv)
+	log.Info().Msgf("{{.ServiceName | Pascal}} server listening at %s:%s", conf.Host, conf.Port)
+	if err := gsrv.Serve(lis); err != nil {
+		log.Fatal().Err(err).Msg("failed to serve")
+	}
+}
+
+func newGrpcServer() *grpc.Server {
+	interceptorOpt := otelgrpc.WithTracerProvider(otel.GetTracerProvider())
+	s := grpc.NewServer(
+		grpc.UnaryInterceptor(otelgrpc.UnaryServerInterceptor(interceptorOpt)),
+		grpc.StreamInterceptor(otelgrpc.StreamServerInterceptor(interceptorOpt)),
+	)
+	return s
+}

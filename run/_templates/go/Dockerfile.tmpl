@@ -1,0 +1,28 @@
+FROM golang:1.19-alpine AS build-stage
+
+# Initial WORKDIR: /go
+# $HOME is /root
+WORKDIR /root/cerebro-build
+
+# Using absolute destination path to avoid any ambiguity
+# Copying service sources to: /root/build/current-service/[CURRENT_NAMESPACE]/[CURRENT_SERVICE_NAME]/
+COPY "./services/{{.ServicesFqn}}/{{.ServiceName}}" "/root/build/current-service/{{.ServicesFqn}}/{{.ServiceName}}"
+
+# Switch the WORKDIR to the service that we are currently building
+WORKDIR "/root/build/current-service/{{.ServicesFqn}}/{{.ServiceName}}"
+
+# Mounting the project's ./services directory inside the build container to: /root/cerebro-build/services
+# !!! source path is relative to the root of the build context !!!
+# !!! use the absolute target mount path; the mount is READ-ONLY !!!
+# Service binary executable output: /root/cerebro-build/bin/service
+RUN --mount=type=bind,source=./services,target=/root/build/services \
+  --mount=type=bind,source=./libs,target=/root/build/libs \
+  CGO_ENABLED=0 \
+  go build \
+  -ldflags="-s -w" \
+  -o /root/build/bin/service \
+  cmd/main.go
+
+FROM scratch
+COPY --from=build-stage /root/build/bin/service ./service
+CMD ["./service"]

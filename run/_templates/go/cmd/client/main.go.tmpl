@@ -1,0 +1,36 @@
+package main
+
+import (
+	"context"
+	"log"
+	"time"
+
+	pb "{{.ServiceFqn}}/proto"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+)
+
+const (
+	address = "localhost:50007"
+)
+
+func main() {
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(address, grpc.WithInsecure(), grpc.WithBlock())
+	if err != nil {
+		log.Fatalf("connect error: %v", err)
+	}
+	defer conn.Close()
+	c := pb.New{{.ServiceName | Pascal}}Client(conn)
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
+	defer cancel()
+
+	ctx = metadata.AppendToOutgoingContext(ctx, "dapr-app-id", "{{.ServiceName}}")
+	r, err := c.Ping(ctx, &pb.PingRequest{})
+	if err != nil {
+		log.Fatalf("request error: %v", err)
+	}
+
+	log.Printf("%s", r.Status)
+}

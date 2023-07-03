@@ -1,0 +1,8 @@
+type: google.api.Service
+config_version: 3
+
+http:
+  rules:
+    - selector: {{.ServiceNamespace | Snake}}_{{.ServiceName | Snake}}.{{.Version}}.{{.ServiceName | Pascal}}.Ping
+      post: /{{.ServiceNamespace}}/{{.ServiceName}}/{{.Version}}/ping
+      body: "*"

@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package {{.ServiceNamespace}}_{{.ServiceName}}.{{.Version}};
+
+option go_package = "{{.ServiceFqn}}/proto";
+
+service {{.ServiceName | Pascal}} {
+  rpc Ping (PingRequest) returns (PingResponse);
+}
+
+message PingRequest {
+}
+
+message PingResponse {
+  string status = 1;
+}
