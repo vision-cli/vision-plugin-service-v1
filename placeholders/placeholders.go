@@ -29,5 +29,8 @@ func SetupPlaceholders(req api_v1.PluginRequest) (*api_v1.PluginPlaceholders, er
 		p.(*api_v1.PluginPlaceholders).ServicesDirectory,
 		p.(*api_v1.PluginPlaceholders).ServiceNamespace,
 		serviceName)
+	p.(*api_v1.PluginPlaceholders).ServiceFqn = filepath.Join(
+		req.Placeholders.ServiceFqn,
+		serviceName)
 	return p.(*api_v1.PluginPlaceholders), nil
 }
