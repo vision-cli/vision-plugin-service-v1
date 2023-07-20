@@ -1,4 +1,4 @@
-name: {{.ServiceNamespace}} {{.ServiceName}} service
+name: {{.ServiceFqn}} {{.ServiceName}} service
 
 on:
   push:
@@ -15,11 +15,11 @@ on:
       - {{.Branch}}
     paths:
       - .github/workflows/{{.ServiceNamespace}}-{{.ServiceName}}.yml
-      - services/{{.ServiceNamespace}}/{{.ServiceName}}/**
+      - {{.ServiceDirectory}}/**
 
 defaults:
   run:
-    working-directory: services/{{.ServiceNamespace}}/{{.ServiceName}}
+    working-directory: {{.ServiceDirectory}}
 
 jobs:
   test:
@@ -48,7 +48,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v3
         with:
-          go-version-file: services/{{.ServiceNamespace}}/{{.ServiceName}}/go.mod
+          go-version-file: {{.ServiceDirectory}}/go.mod
 
       - name: Run tests
         run: make test
@@ -79,7 +79,23 @@ jobs:
         uses: google-github-actions/setup-gcloud@v0
 
       - name: Configure Docker to use gcloud credentials
-        run: gcloud --quiet auth configure-docker gcr.io
+        run: gcloud --quiet auth configure-docker {{.RegistryServer}}
+
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version-file: {{.ServiceDirectory}}/go.mod
+
+      - name: Install Protoc
+        uses: arduino/setup-protoc@v2
+        with:
+          version: "23.x"
+
+      - name: "install protoc-go"
+        run: go install github.com/golang/protobuf/protoc-gen-go
+
+      - name: "install protoc-grpc"
+        run: go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
       - name: Push image
         run: make push-image

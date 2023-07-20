@@ -6,13 +6,12 @@ import (
 	"os"
 	"path/filepath"
 
-	api_v1 "github.com/vision-cli/api/v1"
-
 	"github.com/vision-cli/common/execute"
 	"github.com/vision-cli/common/file"
 	"github.com/vision-cli/common/module"
 	"github.com/vision-cli/common/tmpl"
 	"github.com/vision-cli/common/workspace"
+	"github.com/vision-cli/vision-plugin-service-v1/placeholders"
 	"github.com/vision-cli/vision-plugin-service-v1/svc"
 )
 
@@ -24,7 +23,7 @@ const (
 //go:embed all:_templates/go
 var templateFiles embed.FS
 
-func Create(p *api_v1.PluginPlaceholders, executor execute.Executor, t tmpl.TmplWriter) error {
+func Create(p *placeholders.Placeholders, executor execute.Executor, t tmpl.TmplWriter) error {
 	var err error
 
 	if file.Exists(p.ServiceDirectory) {
@@ -71,7 +70,7 @@ func generateGoFiles(serviceDir string, executor execute.Executor) error {
 //go:embed _templates/workflows/go.yml.tmpl
 var goWorkflow string
 
-func genWorkflow(p *api_v1.PluginPlaceholders) error {
+func genWorkflow(p *placeholders.Placeholders) error {
 	workflowName := svc.WorkflowName(p.ServiceNamespace, p.ServiceName)
 
 	if err := Generate(goWorkflow, workflowDir, workflowName, p); err != nil {

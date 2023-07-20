@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package {{.ServiceNamespace}}_{{.ServiceName}}.{{.Version}};
+package {{.ServiceNamespace | Snake}}_{{.ServiceName | Snake}}.{{.Version}};
 
 option go_package = "{{.ServiceFqn}}/proto";
 

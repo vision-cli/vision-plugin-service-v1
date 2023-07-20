@@ -88,3 +88,8 @@ request-local:
 	grpcurl -plaintext -proto ./proto/{{.ServiceNamespace}}_{{.ServiceName}}.proto \
 	-d '$(BODY)' localhost:8080 {{.ServiceNamespace}}_{{.ServiceName}}.v1.{{.ServiceName | Pascal}}.$(METHOD)
 .PHONY: request-local
+
+request-remote:
+	grpcurl -proto ./proto/{{.ServiceNamespace}}_{{.ServiceName}}.proto \
+	-d '$(BODY)' $(REMOTE_URL):433 {{.ServiceNamespace}}_{{.ServiceName}}.v1.{{.ServiceName | Pascal}}.$(METHOD)
+.PHONY: request-local
